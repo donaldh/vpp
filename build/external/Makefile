@@ -39,8 +39,8 @@ include packages.mk
 include packages/ipsec-mb.mk
 include packages/quicly.mk
 include packages/rdma-core.mk
-include packages/dpdk.mk
 include packages/xdp-tools.mk
+include packages/dpdk.mk
 
 .PHONY: clean
 clean:

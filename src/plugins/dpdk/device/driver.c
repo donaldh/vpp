@@ -129,6 +129,10 @@ static dpdk_driver_t dpdk_drivers[] = {
   {
     .drivers = DPDK_DRIVERS ({ "net_gve", "Google vNIC" }),
     .interface_name_prefix = "VirtualFunctionEthernet",
+  },
+  {
+    .drivers = DPDK_DRIVERS ({ "net_af_xdp", "af_xdp" }),
+    .interface_name_prefix = "af_xdp",
   }
 };
 

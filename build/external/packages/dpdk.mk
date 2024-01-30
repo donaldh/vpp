@@ -54,11 +54,11 @@ DPDK_DRIVERS_DISABLED := baseband/\*,	\
 	crypto/cnxk,						\
 	crypto/dpaa_sec,					\
 	crypto/openssl,						\
-	crypto/aesni_mb,						\
-	crypto/aesni_gcm,						\
+	crypto/aesni_mb,					\
+	crypto/aesni_gcm,					\
 	crypto/kasumi,						\
 	crypto/snow3g,						\
-	crypto/zuc,						\
+	crypto/zuc,						 	\
 	event/\*,							\
 	mempool/dpaa,						\
 	mempool/cnxk,						\
@@ -73,15 +73,14 @@ DPDK_DRIVERS_DISABLED := baseband/\*,	\
 	net/sfc,							\
 	net/softnic,						\
 	net/thunderx,						\
-	raw/ifpga,							\
-	net/af_xdp
+	raw/ifpga
 
 DPDK_LIBS_DISABLED := acl,				\
 	bbdev,								\
 	bitratestats,						\
 	bpf,								\
 	cfgfile,							\
-	cnxk,							\
+	cnxk,					    		\
 	distributor,						\
 	efd,								\
 	fib,								\
@@ -169,8 +168,7 @@ DPDK_MESON_ARGS = \
 	"-Ddisable_libs=$(DPDK_LIBS_DISABLED)" \
 	-Db_pie=true \
 	-Dmachine=$(DPDK_MACHINE) \
-	--buildtype=$(DPDK_BUILD_TYPE) \
-	${DPDK_MLX_CONFIG_FLAG}
+	--buildtype=$(DPDK_BUILD_TYPE)
 
 PIP_DOWNLOAD_DIR = $(CURDIR)/downloads/
 
@@ -181,9 +179,9 @@ define dpdk_config_cmds
 	mkdir -p ../dpdk-meson-venv && \
 	python3 -m venv ../dpdk-meson-venv && \
 	source ../dpdk-meson-venv/bin/activate && \
-	(if ! ls $(PIP_DOWNLOAD_DIR)meson* ; then pip3 download -d $(PIP_DOWNLOAD_DIR) -f $(DL_CACHE_DIR) meson==0.55 setuptools wheel pyelftools; fi) && \
-	pip3 install --no-index --find-links=$(PIP_DOWNLOAD_DIR) meson==0.55 pyelftools && \
-	PKG_CONFIG_PATH=$(dpdk_install_dir)/lib/pkgconfig meson setup $(dpdk_src_dir) \
+	(if ! ls $(PIP_DOWNLOAD_DIR)meson* ; then pip3 download -d $(PIP_DOWNLOAD_DIR) -f $(DL_CACHE_DIR) meson==0.55.3 setuptools wheel pyelftools; fi) && \
+	pip3 install --no-index --find-links=$(PIP_DOWNLOAD_DIR) meson==0.55.3 pyelftools && \
+	PKG_CONFIG_PATH=$(dpdk_install_dir)/lib/pkgconfig:/lib/pkgconfig:/lib64/pkgconfig LIBXDP_OBJECT_PATH=/lib/bpf meson setup $(dpdk_src_dir) \
 		$(dpdk_build_dir) \
 		$(DPDK_MESON_ARGS) \
 			| tee $(dpdk_config_log) && \

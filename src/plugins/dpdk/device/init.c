@@ -1337,7 +1337,7 @@ dpdk_config (vlib_main_t * vm, unformat_input_t * input)
   ret = rte_eal_init (vec_len (conf->eal_init_args),
 		      (char **) conf->eal_init_args);
   if (ret < 0)
-    return clib_error_return (0, "rte_eal_init returned %d", ret);
+    return clib_error_return (0, "rte_eal_init returned %s\n", rte_strerror(rte_errno));
 
   /* enable the AVX-512 vPMDs in DPDK */
   if (clib_cpu_supports_avx512_bitalg () &&

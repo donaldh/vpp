@@ -781,3 +781,14 @@ endif
 .PHONY: check-dpdk-mlx
 check-dpdk-mlx:
 	@[ $$(make -sC build/external dpdk-show-DPDK_MLX_DEFAULT) = y ]
+
+
+DOCKER_REPO?=vpp-base
+TAG?=latest
+IMAGE_TAG=$(DOCKER_REPO):$(TAG)
+
+.PHONY: docker-build
+docker-build:
+	@echo "# Building image: $(IMAGE_TAG)"
+	docker build --tag $(IMAGE_TAG) ${DOCKER_BUILD_ARGS} .
+	@echo "# Build OK! Image: `docker images --format '{{.Repository}}:{{.Tag}} ({{.Size}})' ${IMAGE_TAG}`"
