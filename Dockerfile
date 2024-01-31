@@ -38,6 +38,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libelf-dev \
         python3 \
         pip \
+        ethtool \
+        vim \
         && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /

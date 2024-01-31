@@ -11,3 +11,5 @@ sudo rm -rf /var/run/netns/*
 
 echo "=== Cleanup /run/vpp/*"
 sudo rm -rf /run/vpp/*
+
+rmmod irdma; rmmod ice; modprobe ice

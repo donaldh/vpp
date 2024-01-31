@@ -1,8 +1,11 @@
 #!/bin/bash
 
 echo "=========== start vpp containers ==========="
-#docker run -dit --name vpp1 --privileged --cpuset-cpus=23,25,27,29 --ulimit memlock=-1 -v /dev/hugepages:/dev/hugepages -v /root/vpp:/vpp  vpp-base:latest
-docker run -dit --name vpp1 --privileged --cpuset-cpus=23,25,27,29 --ulimit memlock=-1 -v /dev/hugepages:/dev/hugepages vpp-base:latest
+#docker run -dit --name vpp1 --privileged --cpuset-cpus=3,5,7,9,11 --ulimit memlock=-1 -v /dev/hugepages:/dev/hugepages vpp-base:latest
+docker run -dit --name vpp1 --privileged --cpuset-cpus=3,5,7,9,11 --ulimit memlock=-1 -v /dev/hugepages:/dev/hugepages  \
+    -v /lib/firmware/intel:/lib/firmware/intel \
+	-v /sys/bus/pci/devices:/sys/bus/pci/devices -v /sys/devices/system/node:/sys/devices/system/node -v /lib/modules:/lib/modules -v /dev:/dev \
+    vpp-base:latest
 docker exec vpp1 hostname vpp1
 
 #######################################################################
@@ -41,6 +44,23 @@ sudo ip netns exec $VPP1NS ip link set ens3f0np0 up
 
 echo "=========== remove eth0s in containers ==========="
 docker exec vpp1 ip link del eth0
+
+echo "=========== Setup HW descriptors ==========="
+docker exec vpp1 ethtool -G ens3f0np0 rx 8160 tx 8160
+
+# # echo "=========== Setup flow dir filters ==========="
+# # docker exec vpp1 ethtool -N ens3f0np0 flow-type udp4 dst-port 12 action 1
+# # docker exec vpp1 ethtool -N ens3f0np0 flow-type udp4 dst-port 13 action 2
+
+# echo "=========== Setup RSS ==========="
+# docker exec vpp1 ethtool -X ens3f0np0 equal 4 start 0
+
+# echo "=========== Setup busy polling ==========="
+# docker exec vpp1 bash -c 'echo 2 >> /sys/class/net/ens3f0np0/napi_defer_hard_irqs'
+# docker exec vpp1 bash -c 'echo 200000 >> /sys/class/net/ens3f0np0/gro_flush_timeout'
+
+# echo "=========== Setup irq affinity ==========="
+# docker exec vpp1 bash -c './set_irq_affinity.sh 5,7,9,11 ens3f0np0'
 
 echo "=========== Jump into vpp1 ==========="
 docker exec -ti vpp1 bash
