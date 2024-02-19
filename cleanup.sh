@@ -1,4 +1,7 @@
 #!/bin/bash
+
+interface="ens3f0np0"
+
 echo "=== Kill vpp1 ==="
 docker kill vpp1
 
@@ -13,3 +16,4 @@ sudo rm -rf /run/vpp/*
 
 rmmod irdma; rmmod ice; modprobe ice
 
+./set_irq_affinity.sh local $interface
