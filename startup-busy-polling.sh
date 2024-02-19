@@ -57,3 +57,6 @@ docker exec vpp1 bash -c "echo 200000 >> /sys/class/net/$interface/gro_flush_tim
 
 echo "=========== Jump into vpp1 ==========="
 docker exec -ti vpp1 bash
+
+# To RUN VPP WITH busy polling AF_XDP SOCKETS
+# ./build-root/install-vpp-native/vpp/bin/vpp -c VPP_STARTUP_BUSY_POLL.conf
