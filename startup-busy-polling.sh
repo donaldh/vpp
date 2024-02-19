@@ -42,18 +42,11 @@ echo "=========== configuring $interface ==========="
 sudo ip netns exec $VPP1NS ip addr add 172.19.0.3/16 dev $interface
 sudo ip netns exec $VPP1NS ip link set $interface up
 
-# echo "=========== start vpp on vpp1 ==========="
-# docker exec vpp1 make run-release
-
 echo "=========== remove eth0s in containers ==========="
 docker exec vpp1 ip link del eth0
 
 echo "=========== Setup HW descriptors ==========="
 docker exec vpp1 ethtool -G $interface rx 8160 tx 8160
-
-# # echo "=========== Setup flow dir filters ==========="
-# # docker exec vpp1 ethtool -N $interface flow-type udp4 dst-port 12 action 1
-# # docker exec vpp1 ethtool -N $interface flow-type udp4 dst-port 13 action 2
 
 echo "=========== Setup RSS ==========="
 docker exec vpp1 ethtool -X $interface equal 4 start 0
@@ -61,9 +54,6 @@ docker exec vpp1 ethtool -X $interface equal 4 start 0
 # echo "=========== Setup busy polling ==========="
 docker exec vpp1 bash -c "echo 2 >> /sys/class/net/$interface/napi_defer_hard_irqs"
 docker exec vpp1 bash -c "echo 200000 >> /sys/class/net/$interface/gro_flush_timeout"
-
-# echo "=========== Setup irq affinity ==========="
-# docker exec vpp1 bash -c './set_irq_affinity.sh 5,7,9,11 $interface'
 
 echo "=========== Jump into vpp1 ==========="
 docker exec -ti vpp1 bash

@@ -1,4 +1,5 @@
 #!/bin/bash
+interface="ens3f0np0"
 
 echo "=== Kill vpp1 ==="
 docker kill vpp1
