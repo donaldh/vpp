@@ -1,5 +1,6 @@
 #!/bin/bash
-
+# NON BUSY POLLING CONFIGURATION --- SEEMS BUGGY RIGHT NOW
+# packets dropped after a few seconds of processing
 interface="ens3f0np0"
 cpus="3,5,7,9,11,13,15"
 irq_cpus="13,15"
