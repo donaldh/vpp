@@ -2,6 +2,9 @@
 
 interface="ens3f0np0"
 
+echo "=== Reset RSS ==="
+docker exec vpp1 ethtool -X $interface default
+
 echo "=== Kill vpp1 ==="
 docker kill vpp1
 
@@ -16,4 +19,5 @@ sudo rm -rf /run/vpp/*
 
 rmmod irdma; rmmod ice; modprobe ice
 
+echo "=== Reset irq affinity ==="
 ./set_irq_affinity.sh local $interface

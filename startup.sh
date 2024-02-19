@@ -1,7 +1,7 @@
 #!/bin/bash
 
 interface="ens3f0np0"
-cpus="3,5,7,9,11,13,15,17"
+cpus="3,5,7,9,11,13,15"
 irq_cpus="13,15"
 
 echo "=========== start vpp containers ==========="
@@ -52,11 +52,11 @@ docker exec vpp1 ethtool -G $interface rx 8160 tx 8160
 echo "=========== Setup RSS ==========="
 docker exec vpp1 ethtool -X $interface equal 4 start 0
 
-# echo "=========== Disable busy polling ==========="
+echo "=========== Disable busy polling ==========="
 docker exec vpp1 bash -c "echo 0 >> /sys/class/net/$interface/napi_defer_hard_irqs"
 docker exec vpp1 bash -c "echo 0 >> /sys/class/net/$interface/gro_flush_timeout"
 
-#echo "=========== Setup irq affinity to different cores ==========="
+echo "=========== Setup irq affinity to different cores ==========="
 docker exec vpp1 ./set_irq_affinity.sh $irq_cpus $interface
 
 echo "=========== Jump into vpp1 ==========="
