@@ -1,0 +1,224 @@
+diff --git a/drivers/net/af_xdp/rte_eth_af_xdp.c b/drivers/net/af_xdp/rte_eth_af_xdp.c
+index 2a20a69..a0dc22d 100644
+--- a/drivers/net/af_xdp/rte_eth_af_xdp.c
++++ b/drivers/net/af_xdp/rte_eth_af_xdp.c
+@@ -5,6 +5,7 @@
+ #include <errno.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include <pthread.h>
+ #include <netinet/in.h>
+ #include <net/if.h>
+ #include <sys/un.h>
+@@ -141,6 +142,8 @@ struct pkt_rx_queue {
+ 	struct pollfd fds[1];
+ 	int xsk_queue_idx;
+ 	int busy_budget;
++    pthread_mutex_t lock;
++	int shared_queue;
+ };
+ 
+ struct tx_stats {
+@@ -157,6 +160,8 @@ struct pkt_tx_queue {
+ 
+ 	struct pkt_rx_queue *pair;
+ 	int xsk_queue_idx;
++    int shared_queue;
++    pthread_mutex_t qs_lock;
+ };
+ 
+ struct pmd_internals {
+@@ -177,6 +182,7 @@ struct pmd_internals {
+ 
+ 	struct pkt_rx_queue *rx_queues;
+ 	struct pkt_tx_queue *tx_queues;
++    bool lock_qs;
+ };
+ 
+ struct pmd_process_private {
+@@ -191,6 +197,7 @@ struct pmd_process_private {
+ #define ETH_AF_XDP_BUDGET_ARG			"busy_budget"
+ #define ETH_AF_XDP_FORCE_COPY_ARG		"force_copy"
+ #define ETH_AF_XDP_USE_CNI_ARG			"use_cni"
++#define ETH_AF_XDP_LOCK_TXQ_ARG         "lock_qs"
+ 
+ static const char * const valid_arguments[] = {
+ 	ETH_AF_XDP_IFACE_ARG,
+@@ -201,6 +208,7 @@ static const char * const valid_arguments[] = {
+ 	ETH_AF_XDP_BUDGET_ARG,
+ 	ETH_AF_XDP_FORCE_COPY_ARG,
+ 	ETH_AF_XDP_USE_CNI_ARG,
++    ETH_AF_XDP_LOCK_TXQ_ARG,
+ 	NULL
+ };
+ 
+@@ -324,7 +332,12 @@ af_xdp_rx_zc(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
+ 			(void)recvfrom(xsk_socket__fd(rxq->xsk), NULL, 0,
+ 				       MSG_DONTWAIT, NULL, NULL);
+ 		} else if (xsk_ring_prod__needs_wakeup(fq)) {
+-			(void)poll(&rxq->fds[0], 1, 1000);
++			if(rxq->shared_queue) {
++    		    pthread_mutex_lock(&rxq->lock);
++    			(void)poll(&rxq->fds[0], 1, 1000);
++                pthread_mutex_unlock(&rxq->lock);
++            } else
++                (void)poll(&rxq->fds[0], 1, 1000);
+ 		}
+ 
+ 		return 0;
+@@ -442,7 +455,22 @@ static uint16_t
+ af_xdp_rx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
+ {
+ #if defined(XDP_UMEM_UNALIGNED_CHUNK_FLAG)
+-	return af_xdp_rx_zc(queue, bufs, nb_pkts);
++    //struct pkt_rx_queue *rxq = queue;
++
++    // if(rxq->shared_queue){
++    //     int ret = -1;
++
++    //     pthread_mutex_lock(&rxq->qs_lock);
++
++    //     ret = af_xdp_rx_zc(queue, bufs, nb_pkts);
++
++    //     pthread_mutex_unlock(&rxq->qs_lock);
++
++    //     return ret;
++
++	// } else {
++        return af_xdp_rx_zc(queue, bufs, nb_pkts);
++    // }
+ #else
+ 	return af_xdp_rx_cp(queue, bufs, nb_pkts);
+ #endif
+@@ -505,6 +533,10 @@ kick_tx(struct pkt_tx_queue *txq, struct xsk_ring_cons *cq)
+ 
+ 	pull_umem_cq(umem, XSK_RING_CONS__DEFAULT_NUM_DESCS, cq);
+ 
++    if (txq->shared_queue) {
++        pthread_mutex_lock(&txq->pair->lock);
++    }
++
+ 	if (tx_syscall_needed(&txq->tx))
+ 		while (send(xsk_socket__fd(txq->pair->xsk), NULL,
+ 			    0, MSG_DONTWAIT) < 0) {
+@@ -518,6 +550,11 @@ kick_tx(struct pkt_tx_queue *txq, struct xsk_ring_cons *cq)
+ 					     XSK_RING_CONS__DEFAULT_NUM_DESCS,
+ 					     cq);
+ 		}
++
++    if (txq->shared_queue) {
++        pthread_mutex_unlock(&txq->pair->lock);
++    }
++
+ }
+ 
+ #if defined(XDP_UMEM_UNALIGNED_CHUNK_FLAG)
+@@ -685,7 +722,21 @@ static uint16_t
+ eth_af_xdp_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
+ {
+ #if defined(XDP_UMEM_UNALIGNED_CHUNK_FLAG)
+-	return af_xdp_tx_zc(queue, bufs, nb_pkts);
++   struct pkt_tx_queue *txq = queue;
++
++   if(txq->shared_queue) {
++       int ret = -1;
++
++       pthread_mutex_lock(&txq->qs_lock);
++
++       ret = af_xdp_tx_zc(queue, bufs, nb_pkts);
++
++       pthread_mutex_unlock(&txq->qs_lock);
++
++       return ret;
++   } else {
++       return af_xdp_tx_zc(queue, bufs, nb_pkts);
++   }
+ #else
+ 	return af_xdp_tx_cp_batch(queue, bufs, nb_pkts);
+ #endif
+@@ -2010,7 +2061,7 @@ xdp_get_channels_info(const char *if_name, int *max_queues,
+ static int
+ parse_parameters(struct rte_kvargs *kvlist, char *if_name, int *start_queue,
+ 		 int *queue_cnt, int *shared_umem, char *prog_path,
+-		 int *busy_budget, int *force_copy, int *use_cni)
++		 int *busy_budget, int *force_copy, int *use_cni, int *lock_qs)
+ {
+ 	int ret;
+ 
+@@ -2056,6 +2107,11 @@ parse_parameters(struct rte_kvargs *kvlist, char *if_name, int *start_queue,
+ 	if (ret < 0)
+ 		goto free_kvlist;
+ 
++    ret = rte_kvargs_process(kvlist, ETH_AF_XDP_LOCK_TXQ_ARG,
++        &parse_integer_arg, lock_qs);
++    if (ret < 0)
++        goto free_kvlist;
++
+ free_kvlist:
+ 	rte_kvargs_free(kvlist);
+ 	return ret;
+@@ -2095,7 +2151,7 @@ static struct rte_eth_dev *
+ init_internals(struct rte_vdev_device *dev, const char *if_name,
+ 	       int start_queue_idx, int queue_cnt, int shared_umem,
+ 	       const char *prog_path, int busy_budget, int force_copy,
+-	       int use_cni)
++	       int use_cni, int lock_qs)
+ {
+ 	const char *name = rte_vdev_device_name(dev);
+ 	const unsigned int numa_node = dev->device.numa_node;
+@@ -2125,6 +2181,7 @@ init_internals(struct rte_vdev_device *dev, const char *if_name,
+ 	internals->shared_umem = shared_umem;
+ 	internals->force_copy = force_copy;
+ 	internals->use_cni = use_cni;
++	internals->lock_qs = lock_qs;
+ 
+ 	if (xdp_get_channels_info(if_name, &internals->max_queue_cnt,
+ 				  &internals->combined_queue_cnt)) {
+@@ -2160,6 +2217,14 @@ init_internals(struct rte_vdev_device *dev, const char *if_name,
+ 		internals->rx_queues[i].xsk_queue_idx = start_queue_idx + i;
+ 		internals->tx_queues[i].xsk_queue_idx = start_queue_idx + i;
+ 		internals->rx_queues[i].busy_budget = busy_budget;
++
++        if (internals->lock_qs) {
++            internals->tx_queues[i].shared_queue = internals->rx_queues[i].shared_queue = internals->lock_qs;
++            //rte_spinlock_init(&internals->rx_queues[i].lock);
++            //internals->rx_queues[i].lock = PTHREAD_MUTEX_INITIALIZER;
++            pthread_mutex_init(&internals->rx_queues[i].lock, NULL);
++            pthread_mutex_init(&internals->tx_queues[i].qs_lock, NULL);
++        }
+ 	}
+ 
+ 	ret = get_iface_info(if_name, &internals->eth_addr,
+@@ -2315,6 +2380,7 @@ rte_pmd_af_xdp_probe(struct rte_vdev_device *dev)
+ 	int busy_budget = -1, ret;
+ 	int force_copy = 0;
+ 	int use_cni = 0;
++    int lock_qs = 0;
+ 	struct rte_eth_dev *eth_dev = NULL;
+ 	const char *name = rte_vdev_device_name(dev);
+ 
+@@ -2357,7 +2423,7 @@ rte_pmd_af_xdp_probe(struct rte_vdev_device *dev)
+ 
+ 	if (parse_parameters(kvlist, if_name, &xsk_start_queue_idx,
+ 			     &xsk_queue_cnt, &shared_umem, prog_path,
+-			     &busy_budget, &force_copy, &use_cni) < 0) {
++			     &busy_budget, &force_copy, &use_cni, &lock_qs) < 0) {
+ 		AF_XDP_LOG(ERR, "Invalid kvargs value\n");
+ 		return -EINVAL;
+ 	}
+@@ -2397,7 +2463,7 @@ rte_pmd_af_xdp_probe(struct rte_vdev_device *dev)
+ 
+ 	eth_dev = init_internals(dev, if_name, xsk_start_queue_idx,
+ 				 xsk_queue_cnt, shared_umem, prog_path,
+-				 busy_budget, force_copy, use_cni);
++				 busy_budget, force_copy, use_cni, lock_qs);
+ 	if (eth_dev == NULL) {
+ 		AF_XDP_LOG(ERR, "Failed to init internals\n");
+ 		return -1;
+@@ -2458,4 +2524,5 @@ RTE_PMD_REGISTER_PARAM_STRING(net_af_xdp,
+ 			      "xdp_prog=<string> "
+ 			      "busy_budget=<int> "
+ 			      "force_copy=<int> "
+-			      "use_cni=<int> ");
++			      "use_cni=<int> "
++			      "lock_qs=<int> ");

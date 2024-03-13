@@ -2,8 +2,8 @@
 # NON BUSY POLLING CONFIGURATION --- SEEMS BUGGY RIGHT NOW
 # packets dropped after a few seconds of processing
 interface="ens3f0np0"
-cpus="3,5,7,9,11,13,15"
-irq_cpus="13,15"
+cpus="3,5,7,9,11,13"
+irq_cpus="13"
 
 echo "=========== start vpp containers ==========="
 #docker run -dit --name vpp1 --privileged --cpuset-cpus=3,5,7,9,11 --ulimit memlock=-1 -v /dev/hugepages:/dev/hugepages vpp-base:latest
@@ -50,7 +50,9 @@ docker exec vpp1 ip link del eth0
 echo "=========== Setup HW descriptors ==========="
 docker exec vpp1 ethtool -G $interface rx 8160 tx 8160
 
-echo "=========== Setup RSS ==========="
+#echo "=========== Setup RSS ==========="
+rmmod irdma;
+docker exec vpp1 ethtool -L $interface combined 4
 docker exec vpp1 ethtool -X $interface equal 4 start 0
 
 echo "=========== Disable busy polling ==========="
