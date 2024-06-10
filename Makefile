@@ -22,6 +22,7 @@ STARTUP_DIR?=$(PWD)
 MACHINE=$(shell uname -m)
 SUDO?=sudo -E
 DPDK_CONFIG?=no-pci
+CRE?=docker
 
 ,:=,
 define disable_plugins
@@ -790,5 +791,5 @@ IMAGE_TAG=$(DOCKER_REPO):$(TAG)
 .PHONY: docker-build
 docker-build:
 	@echo "# Building image: $(IMAGE_TAG)"
-	docker build --no-cache --tag $(IMAGE_TAG) ${DOCKER_BUILD_ARGS} .
-	@echo "# Build OK! Image: `docker images --format '{{.Repository}}:{{.Tag}} ({{.Size}})' ${IMAGE_TAG}`"
+	$(CRE) build --no-cache --tag $(IMAGE_TAG) ${DOCKER_BUILD_ARGS} .
+	@echo "# Build OK! Image: `$(CRE) images --format '{{.Repository}}:{{.Tag}} ({{.Size}})' ${IMAGE_TAG}`"
